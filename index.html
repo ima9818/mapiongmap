@@ -3,23 +3,27 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mapion座標リンク → 10進数（計算のみ）</title>
+<title>Mapion座標 → WGS84</title>
 <style>
-  body { font-family: system-ui, sans-serif; padding: 20px; line-height: 1.5; }
-  input, textarea { width: 100%; padding: 8px; font-size: 16px; }
-  button { padding: 10px 16px; margin-top: 8px; font-size: 15px; }
-  .out { background: #f6f8fa; padding: 10px; margin-top: 12px; border-radius: 6px; }
+  body { font-family: system-ui, sans-serif; padding: 20px; }
+  textarea { width: 100%; padding: 8px; font-size: 16px; }
+  button { padding: 10px 16px; margin-top: 8px; font-size: 15px; cursor: pointer; }
+  #out { margin-top: 16px; font-size: 22px; font-weight: bold; }
   .mono { font-family: monospace; }
 </style>
 </head>
 <body>
-<h2>Mapion座標リンク → Googleマップ用の座標変換</h2>
-<p>下に Mapion のURLを貼り付けて「計算する」を押すと、10進数の座標を出します。<br>
-表示された数値をコピーして Googleマップの検索欄に貼り付けてください。</p>
+<h2>Mapion座標 → Googleマップ用（WGS84補正）</h2>
+<p>下に Mapion のURLを貼り付けて「計算する」を押すと、Googleマップで使える座標を表示します。<br>
+結果は数値だけ出ますので、そのままコピーして Googleマップ検索に貼り付けてください。</p>
 
 <textarea id="input" rows="3" placeholder="http://sasp.mapion.co.jp/cm/..."></textarea><br>
 <button onclick="calc()">計算する</button>
-<div id="out" class="out" style="display:none;"></div>
+
+<div id="out"></div>
+<div id="copyBtnContainer" style="display:none;">
+  <button onclick="copyResult()">コピー</button>
+</div>
 
 <script>
 function dmsToDec(d,m,s){ return d + m/60 + s/3600; }
@@ -30,24 +34,30 @@ function tky2wgs(lat,lng){
   return [latW,lngW];
 }
 function calc(){
-  const txt = document.getElementById("input").value.trim();
   let out = document.getElementById("out");
-  out.style.display = "block";
+  let copyBtn = document.getElementById("copyBtnContainer");
   try {
-    const u = new URL(txt);
-    const nl = u.searchParams.get("nl");
-    const el = u.searchParams.get("el");
-    if(!nl || !el){ out.innerHTML="URLが正しくありません"; return; }
-    const ns = nl.split("/").map(parseFloat);
-    const es = el.split("/").map(parseFloat);
+    const u = new URL(document.getElementById("input").value.trim());
+    const ns = u.searchParams.get("nl").split("/").map(parseFloat);
+    const es = u.searchParams.get("el").split("/").map(parseFloat);
     const lat = dmsToDec(ns[0],ns[1],ns[2]);
     const lng = dmsToDec(es[0],es[1],es[2]);
     const [latW,lngW] = tky2wgs(lat,lng);
-    out.innerHTML = 
-      "① DMS秒小数 → <span class='mono'>"+round6(lat)+","+round6(lng)+"</span><br>"+
-      "② 測地系補正 → <span class='mono'>"+round6(latW)+","+round6(lngW)+"</span>";
+    const result = round6(latW)+","+round6(lngW);
+    out.innerHTML = "<span class='mono'>"+result+"</span>";
+    copyBtn.style.display = "block";
+    copyBtn.setAttribute("data-result", result);
   } catch(e){
-    out.innerHTML="エラー："+e.message;
+    out.innerHTML = "エラー: URLを確認してください";
+    copyBtn.style.display = "none";
+  }
+}
+function copyResult(){
+  const text = document.getElementById("copyBtnContainer").getAttribute("data-result");
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(text).then(()=>alert("コピーしました: "+text));
+  } else {
+    window.prompt("コピーしてください", text);
   }
 }
 </script>
