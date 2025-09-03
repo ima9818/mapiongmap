@@ -3,46 +3,63 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mapion座標 → WGS84（水利KMLに重ねてプレビュー）</title>
+<title>Mapion座標 → 水利マップ＋経路案内</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   body { font-family: system-ui, sans-serif; margin:0; padding:16px; }
-  textarea { width:100%; padding:8px; font-size:16px; }
+  textarea, input, select { width:100%; padding:8px; font-size:16px; box-sizing: border-box; }
   button { padding:10px 16px; margin:6px 6px 6px 0; font-size:15px; cursor:pointer; }
-  #out { margin-top: 12px; font-size: 22px; font-weight: bold; }
+  #out { margin:12px 0; font-size:20px; font-weight:bold; }
   .mono { font-family: monospace; }
-  #map { width:100%; height:60vh; display:none; margin-top:10px; }
+  #map { width:100%; height:60vh; margin-top:10px; display:none; }
+  .row { margin-top:10px; }
   small { color:#666; }
 </style>
 </head>
 <body>
-<h2>Mapion座標 → Googleマップ用（WGS84補正）</h2>
-<p>下に Mapion のURLを貼り付けて「計算する」を押すと、Googleマップで使える座標を表示します。<br>
-結果は数値だけ出ますので、そのままコピーまたはGoogleマップで開いてください。</p>
+<h2>Mapion座標 → 水利マップ表示（WGS84補正＋経路案内）</h2>
+<p>Mapionリンクを貼って <b>計算</b>。水利マップを背景に補正座標ピンを表示できます。コピーやGoogleマップでの経路案内も可能です。</p>
 
-<textarea id="input" rows="3" placeholder="http://sasp.mapion.co.jp/cm/.../?nl=36/16/35.98&el=139/15/34.17"></textarea><br>
-<button onclick="calc()">計算する</button>
-
-<div id="out"></div>
-<div id="buttons" style="display:none;">
+<textarea id="input" rows="3" placeholder="http://sasp.mapion.co.jp/cm/.../?nl=36/16/35.98&el=139/15/34.17"></textarea>
+<div class="row">
+  <button onclick="calc()">計算</button>
   <button onclick="copyResult()">コピー</button>
-  <button onclick="openGoogleMaps()">Googleマップで開く</button>
-  <button onclick="preview()">プレビュー（消防水利KMLに重ねて表示）</button>
-  <br><small>※ プレビューはこのページ内の地図に、水利KML＋今回のピンを重ねて表示します。</small>
+  <button onclick="openGoogleMaps()">地図で開く</button>
+  <button onclick="navigate()">経路案内</button>
+  <button onclick="preview()">プレビュー（水利＋ピン）</button>
 </div>
 
+<div id="out"></div>
 <div id="map"></div>
+
+<!-- 経路オプション -->
+<div class="row">
+  <label>経路モード：
+    <select id="mode">
+      <option value="driving">自動車</option>
+      <option value="walking">徒歩</option>
+      <option value="bicycling">自転車（Webのみ）</option>
+      <option value="transit">公共交通（Webのみ）</option>
+    </select>
+  </label>
+</div>
+<div class="row">
+  <label><input type="checkbox" id="avoid_hwy"> 高速道路回避</label>
+  <label><input type="checkbox" id="avoid_toll"> 有料道路回避</label>
+  <label><input type="checkbox" id="avoid_ferry"> フェリー回避</label>
+</div>
+<div class="row">
+  <label>経由地（緯度,経度。複数は改行で）</label>
+  <textarea id="waypoints" rows="2"></textarea>
+</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/@mapbox/leaflet-omnivore@0.3.4/leaflet-omnivore.min.js"></script>
 <script>
-/* ====== 設定：KMLの場所（リポジトリに置いた water.kml など） ====== */
-const KML_URL = "water.kml";
+let latestResult = "";  // "lat,lng"
+let map, kmlLayer, marker;
 
-/* ====== 計算（Mapion DMS → WGS84補正） ====== */
-let latestResult = "";      // "lat,lng"（小数6桁）
-let latestLat = null, latestLng = null;
-
+/* --- 座標変換（Mapion DMS → WGS84補正） --- */
 function dmsToDec(d,m,s){ return d + m/60 + s/3600; }
 function round6(x){ return Math.round(x*1e6)/1e6; }
 function tky2wgs(lat,lng){
@@ -53,7 +70,6 @@ function tky2wgs(lat,lng){
 
 function calc(){
   const out = document.getElementById("out");
-  const btns = document.getElementById("buttons");
   try {
     const u = new URL(document.getElementById("input").value.trim());
     const ns = u.searchParams.get("nl").split("/").map(parseFloat);
@@ -61,20 +77,14 @@ function calc(){
     const lat = dmsToDec(ns[0],ns[1],ns[2]);
     const lng = dmsToDec(es[0],es[1],es[2]);
     const [latW,lngW] = tky2wgs(lat,lng);
-    latestLat = round6(latW);
-    latestLng = round6(lngW);
-    latestResult = `${latestLat},${latestLng}`;
+    latestResult = round6(latW)+","+round6(lngW);
     out.innerHTML = "<span class='mono'>"+latestResult+"</span>";
-    btns.style.display = "block";
   } catch(e){
-    out.innerHTML = "エラー: URLを確認してください";
-    btns.style.display = "none";
-    latestLat = latestLng = null;
     latestResult = "";
+    out.textContent = "エラー: URLを確認してください";
   }
 }
 
-/* ====== コピー & Googleマップ起動 ====== */
 function copyResult(){
   if(!latestResult) return;
   if(navigator.clipboard){
@@ -84,59 +94,112 @@ function copyResult(){
   }
 }
 
+/* --- Googleマップでピン表示 --- */
 function openGoogleMaps(){
   if(!latestResult) return;
   const isAndroid = /Android/i.test(navigator.userAgent);
   const [lat, lng] = latestResult.split(",");
+  const webUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
   if(isAndroid){
-    // Android → geo: 優先、失敗なら https にフォールバック
     const geoUrl = `geo:${lat},${lng}?q=${lat},${lng}`;
-    const webUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
     const t = Date.now();
     window.location.href = geoUrl;
-    setTimeout(() => { if (Date.now() - t < 1200) window.location.href = webUrl; }, 1000);
+    setTimeout(()=>{ if(Date.now()-t<1200) window.location.href = webUrl; }, 900);
   } else {
-    // iPhone / PC → https
-    const webUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
     window.open(webUrl, "_blank");
   }
 }
 
-/* ====== プレビュー（このページ内で KML＋ピン の重ね表示） ====== */
-let map, kmlLayer, marker;
-
-function initMap(){
-  if(map) return;
-  map = L.map('map');
-  // 背景タイル（OSM）
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    maxZoom: 19,
-    attribution:'&copy; OpenStreetMap'
-  }).addTo(map);
-  marker = L.marker([0,0]);
+/* --- 現在地取得 --- */
+function getOriginLatLng(){
+  return new Promise((res)=>{
+    if(!navigator.geolocation) return res(null);
+    navigator.geolocation.getCurrentPosition(
+      p => res(`${p.coords.latitude},${p.coords.longitude}`),
+      _ => res(null),
+      { enableHighAccuracy:true, timeout:4000, maximumAge:0 }
+    );
+  });
 }
 
+/* --- 経路案内 --- */
+async function navigate(){
+  if(!latestResult) return;
+  const [destLat, destLng] = latestResult.split(",");
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  const mode = document.getElementById('mode').value;
+  const avoid_h = document.getElementById('avoid_hwy').checked;
+  const avoid_t = document.getElementById('avoid_toll').checked;
+  const avoid_f = document.getElementById('avoid_ferry').checked;
+
+  const wptLines = document.getElementById('waypoints').value
+                    .split(/\n+/).map(s=>s.trim()).filter(Boolean);
+  const hasWaypoints = wptLines.length > 0;
+
+  const origin = await getOriginLatLng();
+  const avoidList = [];
+  if(avoid_h) avoidList.push('highways');
+  if(avoid_t) avoidList.push('tolls');
+  if(avoid_f) avoidList.push('ferries');
+
+  let webUrl = `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}&travelmode=${mode}`;
+  if(origin) webUrl += `&origin=${encodeURIComponent(origin)}`;
+  if(avoidList.length) webUrl += `&avoid=${avoidList.join(',')}`;
+  if(hasWaypoints){
+    const wp = wptLines.join('|');
+    webUrl += `&waypoints=${encodeURIComponent(wp)}`;
+    window.open(webUrl, "_blank");
+    return;
+  }
+
+  if(isAndroid){
+    const modeMap = {driving:'d', walking:'w', bicycling:'b', transit:'d'};
+    const m = modeMap[mode] || 'd';
+    let avoidStr = '';
+    if(avoid_t) avoidStr += 't';
+    if(avoid_h) avoidStr += 'h';
+    if(avoid_f) avoidStr += 'f';
+    let intent = `google.navigation:q=${destLat},${destLng}&mode=${m}`;
+    if(avoidStr) intent += `&avoid=${avoidStr}`;
+    const t = Date.now();
+    window.location.href = intent;
+    setTimeout(()=>{ if(Date.now()-t<1200) window.location.href = webUrl; }, 900);
+    return;
+  }
+
+  if(isIOS){
+    let appUrl = `comgooglemaps://?daddr=${destLat},${destLng}&directionsmode=${mode}`;
+    if(origin) appUrl += `&saddr=${encodeURIComponent(origin)}`;
+    const t = Date.now();
+    window.location.href = appUrl;
+    setTimeout(()=>{ if(Date.now()-t<1200) window.location.href = webUrl; }, 900);
+    return;
+  }
+
+  window.open(webUrl, "_blank");
+}
+
+/* --- 水利マップ＋ピン プレビュー --- */
 function preview(){
-  if(latestLat==null){ alert("先に『計算する』を押してください。"); return; }
+  if(!latestResult){ alert("先に計算してください"); return; }
   document.getElementById('map').style.display = 'block';
-  initMap();
+  if(!map){
+    map = L.map('map');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      maxZoom:19, attribution:'&copy; OpenStreetMap'
+    }).addTo(map);
+    marker = L.marker([0,0]);
+  }
+  if(kmlLayer){ try{ map.removeLayer(kmlLayer);}catch(e){} }
+  kmlLayer = omnivore.kml("water.kml").on('ready', function(){
+    try { map.fitBounds(kmlLayer.getBounds(), {padding:[20,20]}); }catch(e){}
+  }).addTo(map);
 
-  // 既存KMLレイヤを外す
-  if(kmlLayer){ try{ map.removeLayer(kmlLayer); }catch(e){} }
-
-  // KML読込（同階層に water.kml を置いた場合は KML_URL = "water.kml"）
-  kmlLayer = omnivore.kml(KML_URL)
-    .on('ready', function(){
-      try{
-        const b = kmlLayer.getBounds();
-        map.fitBounds(b, {padding:[20,20]});
-      }catch(e){}
-    })
-    .addTo(map);
-
-  // ピンを置いて中心へ
-  marker.setLatLng([latestLat, latestLng]).addTo(map);
-  map.setView([latestLat, latestLng], 17);
+  const [lat, lng] = latestResult.split(",");
+  marker.setLatLng([lat, lng]).addTo(map);
+  map.setView([lat, lng], 17);
 }
 </script>
 </body>
