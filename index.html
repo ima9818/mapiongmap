@@ -18,14 +18,14 @@
 <body>
 <h2>Mapion座標 → Googleマップ用（WGS84補正）</h2>
 <p>Mapion の座標リンクを貼って <b>計算</b>。結果は数値のみ表示します。<br>
-<b>地図で開く</b>は Googleマップ<strong>アプリ優先</strong>（失敗時はWebに自動フォールバック）。<br>
-<b>プレビュー</b>は水利KML（<code>water.kml</code>）を背景にピンを重ねて表示します。</p>
+<b>地図で開く</b>は Googleマップ<strong>アプリ優先</strong>（失敗時のみWeb）。<br>
+<b>プレビュー</b>は水利KML（<code>water.kml</code>）を背景にピンを重ねます。</p>
 
 <textarea id="input" rows="3" placeholder="http://sasp.mapion.co.jp/cm/.../?nl=36/16/35.98&el=139/15/34.17"></textarea>
 <div>
   <button onclick="calc()">計算</button>
   <button onclick="copyResult()">コピー</button>
-  <button onclick="openGoogleMaps()">地図で開く</button>
+  <button onclick="openGoogleMaps()">地図で開く（アプリ優先）</button>
   <button onclick="preview()">プレビュー（水利＋ピン）</button>
 </div>
 
@@ -83,20 +83,23 @@ function openGoogleMaps(){
   const webUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
 
   if (isAndroid) {
+    // Androidは geo: を最優先
     const appUrl = `geo:${lat},${lng}?q=${lat},${lng}`;
     const t = Date.now();
-    location.href = appUrl;
+    location.href = appUrl;                       // ユーザー操作直後の同期遷移が成功しやすい
     setTimeout(()=>{ if (Date.now()-t < 1200) location.href = webUrl; }, 900);
     return;
   }
   if (isIOS) {
+    // iOSは comgooglemaps:// を最優先（アプリ未インストールなら失敗→Webへ）
     const appUrl = `comgooglemaps://?q=${lat},${lng}`;
     const t = Date.now();
     location.href = appUrl;
     setTimeout(()=>{ if (Date.now()-t < 1200) location.href = webUrl; }, 900);
     return;
   }
-  window.open(webUrl, "_blank"); // PCなど
+  // PCなど
+  window.open(webUrl, "_blank");
 }
 
 /* --- 水利マップ＋ピン プレビュー（Leaflet + KML） --- */
