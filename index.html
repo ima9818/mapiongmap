@@ -40,7 +40,7 @@ let map, kmlLayer, marker;
 
 const MYMAP_URL = 'https://maps.app.goo.gl/YAThepwHi8HrtDBk6?g_st=il'; // 先に開くマイマップ
 const KML_URL   = './water.kml';                                       // プレビュー用KML（同階層に置く）
-const BURST_DELAY_MS = 25; // ほぼ同時にする遅延（必要なら 150〜400 に調整）
+const BURST_DELAY_MS = ０; // ほぼ同時にする遅延（必要なら 150〜400 に調整）
 
 /* --- 座標変換（Mapion DMS → WGS84補正） --- */
 function dmsToDec(d,m,s){ return d + m/60 + s/3600; }
