@@ -3,157 +3,104 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mapion座標 → Googleマップ（アプリ限定／WGS84補正）</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<title>Mapion座標 → Googleマップ（ワンボタン）</title>
 <style>
-  body { font-family: system-ui, sans-serif; margin:0; padding:16px; }
-  textarea { width:100%; padding:8px; font-size:16px; box-sizing:border-box; }
-  button { padding:10px 16px; margin:6px 6px 6px 0; font-size:15px; cursor:pointer; }
-  #out { margin:12px 0; font-size:20px; font-weight:bold; }
-  .mono { font-family: monospace; }
-  #map { width:100%; height:60vh; margin-top:10px; display:none; }
-  small { color:#666; }
+  body{ font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans JP, sans-serif; margin:0; padding:16px; line-height:1.6; }
+  h1{ font-size:20px; margin:0 0 10px; }
+  textarea{ width:100%; box-sizing:border-box; font-size:16px; padding:10px; }
+  button{ padding:12px 16px; font-size:16px; margin-top:10px; width:100%; cursor:pointer; }
+  #out{ margin-top:12px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:18px; font-weight:700; }
+  .msg{ color:#666; font-size:12px; margin-top:6px; }
 </style>
 </head>
 <body>
-<h2>Mapion座標 → Googleマップ用（WGS84補正／アプリ限定）</h2>
-<p>
-① <b>マイマップ</b>をアプリで開く → ② <b>約0.3秒後に座標ピン</b>をアプリで開きます。<br>
-※ Web版には一切フォールバックしません。アプリ未インストール端末では動作しません。
-</p>
+<h1>Mapion座標 → Googleマップ（ワンボタン）</h1>
+<p>MapionのURLを貼って、下のボタンを押すと<br><b>計算 → コピー → Googleマップで開く</b> を一気に行います。</p>
 
-<textarea id="input" rows="3" placeholder="http://sasp.mapion.co.jp/cm/.../?nl=36/16/35.98&el=139/15/34.17"></textarea>
-<div>
-  <button onclick="calc()">計算</button>
-  <button onclick="copyResult()">コピー</button>
-  <button onclick="openMapsAppOnly()">地図で開く（アプリ限定：マイマップ→座標）</button>
-  <button onclick="preview()">プレビュー（水利＋ピン）</button>
-</div>
+<textarea id="input" rows="3" placeholder="例）http://sasp.mapion.co.jp/cm/119isesaki/?nl=36/16/35.98&el=139/15/34.17&scl=1500"></textarea>
+<button id="goBtn" onclick="go()">計算して結果をコピーして地図を開く</button>
 
 <div id="out"></div>
-<div id="map"></div>
+<div class="msg">※ 測地系補正は Tokyo → WGS84（準拠式）／小数第6位に丸め</div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/@mapbox/leaflet-omnivore@0.3.4/leaflet-omnivore.min.js"></script>
 <script>
-let latestResult = "";      // "lat,lng"
-let map, kmlLayer, marker;
-
-/* ▼▼▼ ここを必要に応じて調整 ▼▼▼ */
-// マイマップ：アプリで開きやすい短縮リンク（ユニバーサルリンク）をそのまま叩きます。
-// ※ iOS/Androidとも通常はアプリに遷移します（環境により挙動差あり）
-const MYMAP_URL = 'https://maps.app.goo.gl/YAThepwHi8HrtDBk6?g_st=il';
-
-// プレビュー用 KML ファイル（index.html と同階層にフルKMLを配置）
-const KML_URL   = './water.kml';
-
-// 2発目（座標ピン）を撃つまでの待ち時間（ミリ秒）
-const BURST_DELAY_MS = 300;
-/* ▲▲▲ 調整ここまで ▲▲▲ */
-
-/* --- 座標変換（Mapion DMS → WGS84補正） --- */
+/* ---- 変換ユーティリティ ---- */
 function dmsToDec(d,m,s){ return d + m/60 + s/3600; }
 function round6(x){ return Math.round(x*1e6)/1e6; }
 function tky2wgs(lat,lng){
+  // TKY → WGS84（準拠式）
   const latW = lat - 0.00010695*lat + 0.000017464*lng + 0.0046017;
   const lngW = lng - 0.000046038*lat - 0.000083043*lng + 0.010040;
   return [latW,lngW];
 }
 
-function calc(){
-  const out = document.getElementById("out");
-  try {
-    const u = new URL(document.getElementById("input").value.trim());
-    const ns = u.searchParams.get("nl").split("/").map(parseFloat);
-    const es = u.searchParams.get("el").split("/").map(parseFloat);
-    const lat = dmsToDec(ns[0],ns[1],ns[2]);
-    const lng = dmsToDec(es[0],es[1],es[2]);
-    const [latW,lngW] = tky2wgs(lat,lng);
-    latestResult = round6(latW)+","+round6(lngW);
-    out.innerHTML = "<span class='mono'>"+latestResult+"</span>";
-  } catch(e){
-    latestResult = "";
-    out.textContent = "エラー: URLを確認してください";
-  }
-}
-
-function copyResult(){
-  if(!latestResult) return;
-  if(navigator.clipboard){
-    navigator.clipboard.writeText(latestResult).then(()=>alert("コピーしました: "+latestResult));
-  } else {
-    window.prompt("コピーしてください", latestResult);
-  }
-}
-
-/* --- アプリ限定：①マイマップ → ②座標ピン（両方とも“アプリだけ”を叩く） --- */
-function openMapsAppOnly(){
-  if(!latestResult) return;
-  const [lat, lng] = latestResult.split(",");
-  const isAndroid = /Android/i.test(navigator.userAgent);
-  const isIOS     = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-  // ① マイマップをアプリで開く（ユニバーサルリンクを同期遷移で叩く）
-  //    ※ window.open だとブロックや別タブになるので、アプリ誘導の成功率を上げるため location.href を使用
-  location.href = MYMAP_URL;
-
-  // ② 少し遅らせて座標ピンを“アプリ専用スキーム”で開く（Webフォールバックはしない）
-  setTimeout(()=>{
-    if (isAndroid) {
-      // Android：geo: スキーム（Googleマップアプリが受ける）
-      location.href = `geo:${lat},${lng}?q=${lat},${lng}`;
-      return;
-    }
-    if (isIOS) {
-      // iOS：comgooglemaps:// スキーム（Googleマップアプリが受ける）
-      location.href = `comgooglemaps://?q=${lat},${lng}`;
-      return;
-    }
-    // PCなどは何もしない（アプリ限定のため）
-  }, BURST_DELAY_MS);
-}
-
-/* --- 水利マップ＋ピン（ブラウザプレビュー用：任意） --- */
-function preview(){
-  if(!latestResult){ alert("先に計算してください"); return; }
-  document.getElementById('map').style.display = 'block';
-
-  if(!map){
-    map = L.map('map');
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-      maxZoom:19, attribution:'&copy; OpenStreetMap'
-    }).addTo(map);
-    marker = L.marker([0,0]);
-  }
-
-  if(kmlLayer){ try{ map.removeLayer(kmlLayer);}catch(e){} }
+/* ---- ワンボタン処理 ---- */
+async function go(){
+  const out = document.getElementById('out');
+  out.textContent = '';
+  let latlng = '';
 
   try{
-    kmlLayer = omnivore.kml(KML_URL)
-      .on('ready', function(){
-        try{
-          const b = kmlLayer.getBounds();
-          if (b && b.isValid && b.isValid()) map.fitBounds(b, {padding:[20,20]});
-        }catch(e){}
-      })
-      .on('error', function(){
-        alert(
-          "water.kml を読み込めませんでした。\n\n" +
-          "チェック項目:\n" +
-          "・index.html と同じ公開フォルダに water.kml がある（root か docs）\n" +
-          "・拡張子は .kml（.kmz は不可）\n" +
-          "・<NetworkLink> を含まないフルKMLである\n" +
-          "・URLパスは ./water.kml になっている"
-        );
-      })
-      .addTo(map);
-  }catch(err){
-    alert("KML読み込みエラー: " + err.message);
-  }
+    // 1) 計算
+    const raw = document.getElementById('input').value.trim();
+    if(!raw) throw new Error('URLが空です');
 
-  const [lat, lng] = latestResult.split(",");
-  marker.setLatLng([lat, lng]).addTo(map);
-  map.setView([lat, lng], 17);
+    const u = new URL(raw);
+    const nl = u.searchParams.get('nl');
+    const el = u.searchParams.get('el');
+    if(!nl || !el) throw new Error('URLに nl / el が含まれていません');
+
+    const ns = nl.split('/').map(v => parseFloat(v));
+    const es = el.split('/').map(v => parseFloat(v));
+    if(ns.length<3 || es.length<3 || ns.some(isNaN) || es.some(isNaN)){
+      throw new Error('緯度/経度の形式（度/分/秒）が不正です');
+    }
+
+    const lat = dmsToDec(ns[0], ns[1], ns[2]);
+    const lng = dmsToDec(es[0], es[1], es[2]);
+    const [latW, lngW] = tky2wgs(lat, lng);
+    latlng = `${round6(latW)},${round6(lngW)}`;
+
+    // 2) コピー
+    try{
+      if(navigator.clipboard && window.isSecureContext){
+        await navigator.clipboard.writeText(latlng);
+      }else{
+        // 非HTTPS等のフォールバック
+        const ta = document.createElement('textarea');
+        ta.value = latlng;
+        document.body.appendChild(ta);
+        ta.select(); ta.setSelectionRange(0, ta.value.length);
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+    }catch(_){
+      // クリップボード不可時は手動コピー
+      window.prompt('コピーしてください', latlng);
+    }
+
+    out.textContent = latlng;
+
+    // 3) Googleマップで開く（https のユニバーサルリンク優先）
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    const pinUL = `https://www.google.com/maps/search/?api=1&query=${latlng}`;
+
+    // ULで同一タブ遷移（アプリに移りやすい）
+    const t = Date.now();
+    location.href = pinUL;
+
+    // Androidでどうしてもブラウザに留まる端末向けの保険（任意）
+    if(isAndroid){
+      setTimeout(()=>{
+        if(Date.now()-t < 1100){
+          location.href = `geo:${latlng}?q=${latlng}`;
+        }
+      }, 900);
+    }
+
+  }catch(e){
+    out.textContent = 'エラー：' + e.message;
+  }
 }
 </script>
 </body>
