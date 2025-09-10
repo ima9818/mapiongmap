@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mapion座標 → Googleマップ（ワンボタン）</title>
+<title>Mapion座標 → Googleマップ</title>
 <style>
   body{ font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans JP, sans-serif; margin:0; padding:16px; line-height:1.6; }
   h1{ font-size:20px; margin:0 0 10px; }
@@ -15,14 +15,14 @@
 </head>
 <body>
 <h1>Mapion座標 → Googleマップ（ワンボタン）</h1>
-<p>災害情報MAILの災害地点のURLを貼って、下のボタンを押すと<br><b>計算 → 計算結果コピー → Googleマップで開く</b> を一気に行います。</p>
-Googleマップに計算結果をペーストしても地点検索できます。
+<p>・災害情報MAILの災害地点のURLを貼って、下のボタンを押すと<br><b>計算 → 計算結果コピー → Googleマップで開く</b> を一気に行います。</p>
+・Googleマップに計算結果をペーストしても地点検索できます。
 <textarea id="input" rows="3" placeholder="例）http://sasp.mapion.co.jp/cm/119isesaki/?nl=36/16/35.98&el=139/15/34.17&scl=1500"></textarea>
 <button id="goBtn" onclick="go()">計算して結果をコピーして地図を開く</button>
 
 <div id="out"></div>
 <div class="msg">※ 測地系補正は Tokyo → WGS84（準拠式）／小数第6位に丸め</div>
-
+※マイマップのバージョンアップには対応していません。
 <script>
 /* ---- 変換ユーティリティ ---- */
 function dmsToDec(d,m,s){ return d + m/60 + s/3600; }
