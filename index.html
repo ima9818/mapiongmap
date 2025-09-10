@@ -14,16 +14,15 @@
 </style>
 </head>
 <body>
-<h1>Mapion座標 → Googleマップ（ワンボタン）</h1>
-<p>MapionのURLを貼って、下のボタンを押すと<br><b>計算 → コピー → マイマップを開く → ほぼ同時に座標ピンを開く</b> を一気に行います。</p>
+<h1>Mapion座標 → Googleマップ</h1>
+<p>MapionのURLを貼って、下のボタンを押すと<br><b>計算 → コピー → マイマップを開く</b> を一気に行います。Googleマップに結果を貼り付けてください。</p>
 
 <textarea id="input" rows="3" placeholder="例）http://sasp.mapion.co.jp/cm/119isesaki/?nl=36/16/35.98&el=139/15/34.17&scl=1500"></textarea>
 <button id="goBtn" onclick="go()">計算して結果をコピーして地図を開く</button>
 
 <div id="out"></div>
 <div class="msg">※ 測地系補正は Tokyo → WGS84（準拠式）／小数第6位に丸め</div>
-
-<script>
+<div class="msg">※ マイマップのバージョンアップには対応していません。</div><script>
 /* ---- 設定 ---- */
 const MYMAP_URL = 'https://maps.app.goo.gl/YAThepwHi8HrtDBk6?g_st=il'; // 先に開くマイマップ
 const BURST_DELAY_MS = 250; // ほぼ同時にするための遅延（200〜400で調整可）
