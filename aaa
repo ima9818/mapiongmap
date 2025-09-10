@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapion座標リンク → 10進数（計算のみ）</title>
+<style>
+  body { font-family: system-ui, sans-serif; padding: 20px; line-height: 1.5; }
+  input, textarea { width: 100%; padding: 8px; font-size: 16px; }
+  button { padding: 10px 16px; margin-top: 8px; font-size: 15px; }
+  .out { background: #f6f8fa; padding: 10px; margin-top: 12px; border-radius: 6px; }
+  .mono { font-family: monospace; }
+</style>
+</head>
+<body>
+<h2>Mapion座標リンク → Googleマップ用の座標変換</h2>
+<p>下に Mapion のURLを貼り付けて「計算する」を押すと、10進数の座標を出します。<br>
+表示された数値をコピーして Googleマップの検索欄に貼り付けてください。</p>
+
+<textarea id="input" rows="3" placeholder="http://sasp.mapion.co.jp/cm/..."></textarea><br>
+<button onclick="calc()">計算する</button>
+<div id="out" class="out" style="display:none;"></div>
+
+<script>
+function dmsToDec(d,m,s){ return d + m/60 + s/3600; }
+function round6(x){ return Math.round(x*1e6)/1e6; }
+function tky2wgs(lat,lng){
+  const latW = lat - 0.00010695*lat + 0.000017464*lng + 0.0046017;
+  const lngW = lng - 0.000046038*lat - 0.000083043*lng + 0.010040;
+  return [latW,lngW];
+}
+function calc(){
+  const txt = document.getElementById("input").value.trim();
+  let out = document.getElementById("out");
+  out.style.display = "block";
+  try {
+    const u = new URL(txt);
+    const nl = u.searchParams.get("nl");
+    const el = u.searchParams.get("el");
+    if(!nl || !el){ out.innerHTML="URLが正しくありません"; return; }
+    const ns = nl.split("/").map(parseFloat);
+    const es = el.split("/").map(parseFloat);
+    const lat = dmsToDec(ns[0],ns[1],ns[2]);
+    const lng = dmsToDec(es[0],es[1],es[2]);
+    const [latW,lngW] = tky2wgs(lat,lng);
+    out.innerHTML = 
+      "① DMS秒小数 → <span class='mono'>"+round6(lat)+","+round6(lng)+"</span><br>"+
+      "② 測地系補正 → <span class='mono'>"+round6(latW)+","+round6(lngW)+"</span>";
+  } catch(e){
+    out.innerHTML="エラー："+e.message;
+  }
+}
+</script>
+</body>
+</html>
