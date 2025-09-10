@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mapion座標 → Googleマップ（二段同時起動／WGS84補正）</title>
+<title>Mapion座標 → Googleマップ（アプリ限定／WGS84補正）</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   body { font-family: system-ui, sans-serif; margin:0; padding:16px; }
@@ -16,16 +16,17 @@
 </style>
 </head>
 <body>
-<h2>Mapion座標 → Googleマップ用（WGS84補正）</h2>
-<p>Mapion の座標リンクを貼って <b>計算</b>。<br>
-<b>地図で開く</b>は「①マイマップ ②約0.25秒後に座標ピン」を<strong>ほぼ同時</strong>に起動（アプリ優先）します。<br>
-<b>プレビュー</b>は水利KML（<code>water.kml</code>）を背景にピンを重ねて表示。</p>
+<h2>Mapion座標 → Googleマップ用（WGS84補正／アプリ限定）</h2>
+<p>
+① <b>マイマップ</b>をアプリで開く → ② <b>約0.3秒後に座標ピン</b>をアプリで開きます。<br>
+※ Web版には一切フォールバックしません。アプリ未インストール端末では動作しません。
+</p>
 
 <textarea id="input" rows="3" placeholder="http://sasp.mapion.co.jp/cm/.../?nl=36/16/35.98&el=139/15/34.17"></textarea>
 <div>
   <button onclick="calc()">計算</button>
   <button onclick="copyResult()">コピー</button>
-  <button onclick="openGoogleMapsBurst()">地図で開く（ほぼ同時：マイマップ→座標）</button>
+  <button onclick="openMapsAppOnly()">地図で開く（アプリ限定：マイマップ→座標）</button>
   <button onclick="preview()">プレビュー（水利＋ピン）</button>
 </div>
 
@@ -38,9 +39,17 @@
 let latestResult = "";      // "lat,lng"
 let map, kmlLayer, marker;
 
-const MYMAP_URL = 'https://maps.app.goo.gl/YAThepwHi8HrtDBk6?g_st=il'; // 先に開くマイマップ
-const KML_URL   = './water.kml';                                       // プレビュー用KML（同階層に置く）
-const BURST_DELAY_MS = ０; // ほぼ同時にする遅延（必要なら 150〜400 に調整）
+/* ▼▼▼ ここを必要に応じて調整 ▼▼▼ */
+// マイマップ：アプリで開きやすい短縮リンク（ユニバーサルリンク）をそのまま叩きます。
+// ※ iOS/Androidとも通常はアプリに遷移します（環境により挙動差あり）
+const MYMAP_URL = 'https://maps.app.goo.gl/YAThepwHi8HrtDBk6?g_st=il';
+
+// プレビュー用 KML ファイル（index.html と同階層にフルKMLを配置）
+const KML_URL   = './water.kml';
+
+// 2発目（座標ピン）を撃つまでの待ち時間（ミリ秒）
+const BURST_DELAY_MS = 300;
+/* ▲▲▲ 調整ここまで ▲▲▲ */
 
 /* --- 座標変換（Mapion DMS → WGS84補正） --- */
 function dmsToDec(d,m,s){ return d + m/60 + s/3600; }
@@ -77,41 +86,34 @@ function copyResult(){
   }
 }
 
-/* --- 地図で開く（①マイマップ → BURST_DELAY_MS後に②座標ピン、いずれもアプリ優先） --- */
-function openGoogleMapsBurst(){
+/* --- アプリ限定：①マイマップ → ②座標ピン（両方とも“アプリだけ”を叩く） --- */
+function openMapsAppOnly(){
   if(!latestResult) return;
   const [lat, lng] = latestResult.split(",");
   const isAndroid = /Android/i.test(navigator.userAgent);
   const isIOS     = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-  // ① マイマップを新しいタブ/アプリで先に開く（ユーザー操作直後）
-  window.open(MYMAP_URL, "_blank");
+  // ① マイマップをアプリで開く（ユニバーサルリンクを同期遷移で叩く）
+  //    ※ window.open だとブロックや別タブになるので、アプリ誘導の成功率を上げるため location.href を使用
+  location.href = MYMAP_URL;
 
-  // ② 少し遅らせて座標ピン（アプリ優先 → 失敗時Web）
-  const webUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-
+  // ② 少し遅らせて座標ピンを“アプリ専用スキーム”で開く（Webフォールバックはしない）
   setTimeout(()=>{
     if (isAndroid) {
-      const appUrl = `geo:${lat},${lng}?q=${lat},${lng}`;
-      const t = Date.now();
-      location.href = appUrl;
-      setTimeout(()=>{ if (Date.now()-t < 1200) location.href = webUrl; }, 800);
+      // Android：geo: スキーム（Googleマップアプリが受ける）
+      location.href = `geo:${lat},${lng}?q=${lat},${lng}`;
       return;
     }
     if (isIOS) {
-      // iOS：まずアプリスキーム優先（確認が出ることがあります）
-      const appUrl = `comgooglemaps://?q=${lat},${lng}`;
-      const t = Date.now();
-      location.href = appUrl;
-      setTimeout(()=>{ if (Date.now()-t < 1200) location.href = webUrl; }, 800);
+      // iOS：comgooglemaps:// スキーム（Googleマップアプリが受ける）
+      location.href = `comgooglemaps://?q=${lat},${lng}`;
       return;
     }
-    // PCなどはWeb
-    window.open(webUrl, "_blank");
+    // PCなどは何もしない（アプリ限定のため）
   }, BURST_DELAY_MS);
 }
 
-/* --- 水利マップ＋ピン プレビュー（Leaflet + KML） --- */
+/* --- 水利マップ＋ピン（ブラウザプレビュー用：任意） --- */
 function preview(){
   if(!latestResult){ alert("先に計算してください"); return; }
   document.getElementById('map').style.display = 'block';
