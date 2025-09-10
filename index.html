@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mapion座標 → Googleマップ</title>
+<title>Mapion座標 → Googleマップ（ワンボタン）</title>
 <style>
   body{ font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans JP, sans-serif; margin:0; padding:16px; line-height:1.6; }
   h1{ font-size:20px; margin:0 0 10px; }
@@ -14,16 +14,20 @@
 </style>
 </head>
 <body>
-<h1>Mapion座標 → Googleマップ</h1>
-<p>・災害情報MAILの災害地点のURLを貼って、下のボタンを押すと<br><b>計算 → 計算結果コピー → Googleマップで開く</b> を一気に行います。</p>
-・Googleマップに計算結果をペーストしても地点検索できます。
+<h1>Mapion座標 → Googleマップ（ワンボタン）</h1>
+<p>MapionのURLを貼って、下のボタンを押すと<br><b>計算 → コピー → マイマップを開く → ほぼ同時に座標ピンを開く</b> を一気に行います。</p>
+
 <textarea id="input" rows="3" placeholder="例）http://sasp.mapion.co.jp/cm/119isesaki/?nl=36/16/35.98&el=139/15/34.17&scl=1500"></textarea>
 <button id="goBtn" onclick="go()">計算して結果をコピーして地図を開く</button>
 
 <div id="out"></div>
 <div class="msg">※ 測地系補正は Tokyo → WGS84（準拠式）／小数第6位に丸め</div>
-<div class="msg">※マイマップのバージョンアップには対応していません。</div>
+
 <script>
+/* ---- 設定 ---- */
+const MYMAP_URL = 'https://maps.app.goo.gl/YAThepwHi8HrtDBk6?g_st=il'; // 先に開くマイマップ
+const BURST_DELAY_MS = 250; // ほぼ同時にするための遅延（200〜400で調整可）
+
 /* ---- 変換ユーティリティ ---- */
 function dmsToDec(d,m,s){ return d + m/60 + s/3600; }
 function round6(x){ return Math.round(x*1e6)/1e6; }
@@ -81,22 +85,28 @@ async function go(){
 
     out.textContent = latlng;
 
-    // 3) Googleマップで開く（https のユニバーサルリンク優先）
+    // 3) マイマップを開く（新しいタブ/アプリ）
+    //    window.open を使うことで、元タブのJSが止まらず 4) へ進める
+    window.open(MYMAP_URL, '_blank');
+
+    // 4) ほぼ同時に座標ピンを開く（UL優先 → Androidは必要に応じて geo:）
     const isAndroid = /Android/i.test(navigator.userAgent);
     const pinUL = `https://www.google.com/maps/search/?api=1&query=${latlng}`;
 
-    // ULで同一タブ遷移（アプリに移りやすい）
-    const t = Date.now();
-    location.href = pinUL;
+    setTimeout(()=>{
+      const t = Date.now();
+      // 同一タブ遷移：ユーザー操作直後扱いになりアプリへ移りやすい
+      location.href = pinUL;
 
-    // Androidでどうしてもブラウザに留まる端末向けの保険（任意）
-    if(isAndroid){
-      setTimeout(()=>{
-        if(Date.now()-t < 1100){
-          location.href = `geo:${latlng}?q=${latlng}`;
-        }
-      }, 900);
-    }
+      if(isAndroid){
+        // AndroidでWebに残る端末向けの保険（任意）
+        setTimeout(()=>{
+          if(Date.now()-t < 1100){
+            location.href = `geo:${latlng}?q=${latlng}`;
+          }
+        }, 900);
+      }
+    }, BURST_DELAY_MS);
 
   }catch(e){
     out.textContent = 'エラー：' + e.message;
